@@ -1,0 +1,663 @@
+.TH "include/mpsc.h" 3 "Mon Jan 15 2024" "Version 0.1.1" "lib<mpsc>" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+include/mpsc.h
+.SH SYNOPSIS
+.br
+.PP
+\fC#include <stdbool\&.h>\fP
+.br
+\fC#include <stddef\&.h>\fP
+.br
+
+.SS "Data Structures"
+
+.in +1c
+.ti -1c
+.RI "struct \fBmpsc_create_params_t\fP"
+.br
+.in -1c
+.SS "Typedefs"
+
+.in +1c
+.ti -1c
+.RI "typedef struct mpsc_s \fBmpsc_t\fP"
+.br
+.ti -1c
+.RI "typedef struct mpsc_consumer_s \fBmpsc_consumer_t\fP"
+.br
+.ti -1c
+.RI "typedef struct mpsc_producer_s \fBmpsc_producer_t\fP"
+.br
+.ti -1c
+.RI "typedef \fBvoid\fP() \fBmpsc_producer_thread_callback_t\fP(\fBmpsc_producer_t\fP *producer)"
+.br
+.ti -1c
+.RI "typedef \fBvoid\fP() \fBmpsc_consumer_callback_t\fP(\fBmpsc_consumer_t\fP *consumer, \fBvoid\fP *data, \fBsize_t\fP n, \fBbool\fP closed)"
+.br
+.ti -1c
+.RI "typedef \fBvoid\fP() \fBmpsc_consumer_error_callback_t\fP(\fBmpsc_consumer_t\fP *consumer)"
+.br
+.in -1c
+.SS "Enumerations"
+
+.in +1c
+.ti -1c
+.RI "enum \fBmpsc_register_producer_error_t\fP { \fBMPSC_REGISTER_PRODUCER_ERROR_NONE\fP = 0, \fBMPSC_REGISTER_PRODUCER_ERROR_CLOSED\fP = 1, \fBMPSC_REGISTER_PRODUCER_ERROR_N_MAX_PRODUCERS_REACHED\fP = 2, \fBMPSC_REGISTER_PRODUCER_ERROR_EAGAIN\fP = 3 }"
+.br
+.in -1c
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "\fBmpsc_t\fP * \fBmpsc_create\fP (\fBmpsc_create_params_t\fP params)"
+.br
+.ti -1c
+.RI "\fBvoid\fP \fBmpsc_join\fP (\fBmpsc_t\fP *self)"
+.br
+.ti -1c
+.RI "\fBmpsc_register_producer_error_t\fP \fBmpsc_register_producer\fP (\fBmpsc_t\fP *self, \fBmpsc_producer_thread_callback_t\fP callback, \fBvoid\fP *context)"
+.br
+.ti -1c
+.RI "\fBmpsc_register_producer_error_t\fP \fBmpsc_consumer_register_producer\fP (\fBmpsc_consumer_t\fP *self, \fBmpsc_producer_thread_callback_t\fP callback, \fBvoid\fP *context)"
+.br
+.ti -1c
+.RI "\fBvoid\fP \fBmpsc_consumer_close\fP (\fBmpsc_consumer_t\fP *self)"
+.br
+.ti -1c
+.RI "\fBbool\fP \fBmpsc_producer_ping\fP (\fBmpsc_producer_t\fP *self)"
+.br
+.ti -1c
+.RI "\fBbool\fP \fBmpsc_producer_send\fP (\fBmpsc_producer_t\fP *self, \fBvoid\fP *data, \fBsize_t\fP n)"
+.br
+.ti -1c
+.RI "\fBbool\fP \fBmpsc_producer_send_empty\fP (\fBmpsc_producer_t\fP *self)"
+.br
+.ti -1c
+.RI "\fBvoid\fP * \fBmpsc_producer_context\fP (\fBmpsc_producer_t\fP *self)"
+.br
+.ti -1c
+.RI "\fBmpsc_register_producer_error_t\fP \fBmpsc_producer_register_producer\fP (\fBmpsc_producer_t\fP *self, \fBmpsc_producer_thread_callback_t\fP callback, \fBvoid\fP *context)"
+.br
+.in -1c
+.SH "Data Structure Documentation"
+.PP 
+.SH "struct mpsc_create_params_t"
+.PP 
+The structure that must be passed to \fBmpsc_create\fP to instantiate a new \fBmpsc_t\fP object\&. 
+
+
+.PP
+\fBSee also\fP
+.RS 4
+\fBmpsc_create\fP 
+.RE
+.PP
+
+.PP
+\fBData Fields:\fP
+.RS 4
+\fBsize_t\fP \fIbuffer_size\fP The size (in bytes) of the internal buffer used to transfer a message between a producer and the consumer\&. 
+.br
+
+.PP
+\fBNote\fP
+.RS 4
+- This acts as the upper bound of a message size for the \fBmpsc_t\fP instance\&. Calling \fBmpsc_producer_send\fP with a message of size exceeding this value will cause the process to be terminated, regardless of \fCerror_handling_enabled\fP's value\&. 
+.PP
+- This value can be set to 0 if the application only requires empty messages, or if it does not need to send messages at all\&. 
+.RE
+.PP
+\fBWarning\fP
+.RS 4
+In this context, the argument name \fCbuffer_size\fP should not be confused with the term buffer in the sense of a 'buffered channel', for which the term could correspond to the number of messages that can be held inside an internal message queue to be delivered to the consumer\&. Currently, this library only allows sending one message at the time, in a blocking manner\&. In other words, the \fBmpsc_producer_send\fP and \fBmpsc_producer_send_empty\fP functions are blocking functions\&. 
+.RE
+.PP
+
+.br
+.PP
+\fBmpsc_consumer_callback_t\fP * \fIconsumer_callback\fP The application defined consumer callback function to be used to received messages for the \fBmpsc_t\fP instance\&. 
+.br
+.PP
+\fBmpsc_consumer_error_callback_t\fP * \fIconsumer_error_callback\fP An optional, application defined producer thread callback function used, when \fCerror_handling_enabled = true\fP, to deliver potential internal errors to the application, in which case \fBerrno\fP should be checked for more information\&. 
+.br
+
+.PP
+\fBNote\fP
+.RS 4
+As explained in the \fBmpsc_consumer_error_callback_t\fP documentation, the only possible such error at the moment is \fBENOMEM\fP , which could arise from a failed internal call to \fBmalloc\fP to allocate space where to copy the message from the internal buffer before passing that new memory to the \fCconsumer_callback\fP function's \fCdata\fP argument\&. 
+.RE
+.PP
+
+.br
+.PP
+\fBbool\fP \fIcreate_and_join_thread_safety_disabled\fP A boolean value that can be used to disable the safety feature that prevents \fBmpsc_create\fP and \fBmpsc_join\fP to be called on distinct threads for the same \fBmpsc_t\fP instance\&. 
+.br
+.PP
+\fBbool\fP \fIerror_handling_enabled\fP A boolean value indicating whether (\fCtrue\fP) error handling should be handed over to the application or whether (\fCfalse\fP) errors should be printed to \fBstderr\fP and the process be terminated\&. 
+.br
+
+.PP
+\fBNote\fP
+.RS 4
+Not all errors can be handled, but those that can may occur at three different levels:
+.IP "1." 4
+When calling \fBmpsc_create\fP (the returned value could be the \fBNULL\fP pointer, in which case \fBerrno\fP should be checked for details about the error, which will be related to resources exhaustion; i\&.e\&., \fBENOMEM\fP or \fBEAGAIN\fP )\&.
+.IP "2." 4
+When calling \fBmpsc_register_producer\fP, as well as the \fBmpsc_consumer_register_producer\fP and \fBmpsc_producer_register_producer\fP aliases (which will allow the \fBmpsc_register_producer_error_t\fP error of type \fBMPSC_REGISTER_PRODUCER_ERROR_EAGAIN\fP to be returned, instead of terminating the process)\&.
+.IP "3." 4
+As a result of the internal consumer thread not being able to allocate memory needed to hold a copy of the message temporarily stored inside the internal buffer by a producer for delivery to the consumer callback\&. Such an error will be communicated to the application through the \fCconsumer_error_callback\fP when \fCerror_handling_enabled = true\fP, else will result in the process being terminated\&. 
+.PP
+.RE
+.PP
+
+.br
+.PP
+\fBsize_t\fP \fIn_max_producers\fP The maximum number of producers that can be registered on the \fBmpsc_t\fP instance\&. 
+.br
+
+.PP
+\fBNote\fP
+.RS 4
+- This value must be greater than 0, else the process will be terminated\&. 
+.PP
+- Calling \fBmpsc_register_producer\fP when this value has been reached will result in a \fBmpsc_register_producer_error_t\fP error of type \fBMPSC_REGISTER_PRODUCER_ERROR_N_MAX_PRODUCERS_REACHED\fP \&. 
+.RE
+.PP
+
+.br
+.PP
+.RE
+.PP
+.SH "Typedef Documentation"
+.PP 
+.SS "typedef \fBvoid\fP() mpsc_consumer_callback_t(\fBmpsc_consumer_t\fP *consumer, \fBvoid\fP *data, \fBsize_t\fP n, \fBbool\fP closed)"
+
+.PP
+The signature of the consumer callback function, to be declared and implemented by the application, which is passed as a parameter to the \fBmpsc_create\fP function when instantiating a new channel\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIconsumer\fP A pointer to a \fBmpsc_consumer_t\fP instance for which the callback is being executed\&. 
+.br
+\fIdata\fP A pointer to dynamically allocated memory containing the message sent by a producer to the consumer\&. 
+.br
+\fIn\fP The size (in bytes) of \fCdata\fP \&. 
+.br
+\fIclosed\fP A boolean value indicating whether the channel (i\&.e\&., the \fBmpsc_t\fP instance) has been marked as closed, in which case the callback won't be called again for the given \fBmpsc_t\fP instance\&. 
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBmpsc_create\fP, \fBmpsc_create_params_t\fP 
+.RE
+.PP
+\fBWarning\fP
+.RS 4
+When \fCn\fP is non-zero, \fCdata\fP refers to dynamically allocated memory that is the responsibility of the callback\&. In other words, as soon as \fCdata\fP is no longer needed, it should be freed using \fBfree\fP , else memory will be leaked\&. 
+.RE
+.PP
+\fBNote\fP
+.RS 4
+- There are two scenarios that can cause the \fCclosed\fP argument to be \fCtrue\fP: (1) the \fBmpsc_consumer_close\fP function was called on \fCconsumer\fP from inside the callback or (2) the \fBmpsc_join\fP function has been called on the channel object and all producer threads have returned\&. 
+.PP
+- The callback should return as quick as possible to avoid blocking the consumer thread\&. Blocking tasks, if required, should be offloaded to other threads and the callback should return as quick as possible\&. 
+.PP
+- When \fCn\fP is set to 0, \fCdata\fP will be set to \fBNULL\fP \&. 
+.RE
+.PP
+
+.SS "typedef \fBvoid\fP() mpsc_consumer_error_callback_t(\fBmpsc_consumer_t\fP *consumer)"
+
+.PP
+The signature of an optional consumer error callback function, to be declared and implemented by the application, which is passed as a parameter to the \fBmpsc_create\fP function when instantiating a new channel\&. 
+.PP
+\fBSee also\fP
+.RS 4
+\fBmpsc_create\fP, \fBmpsc_create_params_t\fP 
+.RE
+.PP
+\fBNote\fP
+.RS 4
+- This callback is ignored when \fBmpsc_create_params_t\fP 's \fCerror_handling_enabled\fP is set to \fCfalse\fP, in which case, when an error occurs, information about that error is printed to \fBstderr\fP and the process is terminated\&. 
+.PP
+- When executed for \fCconsumer\fP (i\&.e\&., the specific \fBmpsc_consumer_t\fP instance), the application should look at \fBerrno\fP for information about the encountered error\&. Currently, the only possible error is \fBENOMEM\fP, which arises from a failed internal call to \fBmalloc\fP \&. 
+.RE
+.PP
+
+.SS "typedef \fBvoid\fP() mpsc_producer_thread_callback_t(\fBmpsc_producer_t\fP *producer)"
+
+.PP
+The signature of the producer thread callback function, to be declared and implemented by the application, which is passed as a parameter to the \fBmpsc_register_producer\fP function when registering a producer for a given \fBmpsc_t\fP instance\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIproducer\fP A pointer to a \fBmpsc_producer_t\fP instance for which the callback is being executed\&. 
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBmpsc_register_producer\fP, \fBmpsc_consumer_register_producer\fP, \fBmpsc_producer_register_producer\fP 
+.RE
+.PP
+
+.SS "typedef struct mpsc_s \fBmpsc_t\fP"
+
+.PP
+An opaque data type used as a container for the MPSC channel data\&. 
+.PP
+\fBSee also\fP
+.RS 4
+\fBmpsc_create\fP, \fBmpsc_join\fP 
+.RE
+.PP
+\fBExample:\fP
+.RS 4
+
+.PP
+.nf
+/*
+    Copyright (c) 2024 BB\-301 <fw3dg3@gmail\&.com>
+    [Official repository](https://github\&.com/BB\-301/c\-mpsc)
+
+    Permission is hereby granted, free of charge, to any person
+    obtaining a copy of this software and associated documentation
+    files (the “Software”), to deal in the Software without restriction,
+    including without limitation the rights to use, copy, modify, merge,
+    publish, distribute, sublicense, and/or sell copies of the Software,
+    and to permit persons to whom the Software is furnished to do so,
+    subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Software\&.
+
+    THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT\&. IN NO EVENT SHALL
+    THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE\&.
+*/
+
+/*
+    ======================
+    Example: Quick example
+    ======================
+
+    This is a quick "getting started" example used to illustrate
+    the basic structure of a program using lib<mpsc>\&. This example
+    is featured in the [repository](https://github\&.com/BB\-301/c\-mpsc)'s
+    README\&.md file\&.
+*/
+
+#include <assert\&.h>
+#include <stdbool\&.h>
+#include <stdio\&.h>
+#include <stdlib\&.h>
+
+#include "mpsc\&.h"
+
+#define IGNORE_UNUSED(m) ((void)(m))
+
+#define TEXT_BUFFER_SIZE (100)
+#define N_PRODUCERS (8)
+
+static void my_consumer_callback(mpsc_consumer_t *consumer, void *data, size_t n, bool closed);
+static void my_producer_thread_callback(mpsc_producer_t *producer);
+
+struct my_message
+{
+    char text[TEXT_BUFFER_SIZE];
+};
+
+struct my_producer_thread_callback_context
+{
+    size_t id;
+};
+
+int main(void)
+{
+    mpsc_t *mpsc = mpsc_create((mpsc_create_params_t){
+        \&.buffer_size = sizeof(struct my_message),
+        \&.n_max_producers = N_PRODUCERS,
+        \&.consumer_callback = my_consumer_callback,
+        \&.consumer_error_callback = NULL,
+        \&.error_handling_enabled = false,
+        \&.create_and_join_thread_safety_disabled = false,
+    });
+
+    struct my_producer_thread_callback_context contexts[N_PRODUCERS];
+
+    for (size_t i = 0; i < N_PRODUCERS; i++)
+    {
+        contexts[i]\&.id = i + 1;
+        assert(mpsc_register_producer(mpsc, my_producer_thread_callback, &contexts[i]) == MPSC_REGISTER_PRODUCER_ERROR_NONE);
+    }
+
+    mpsc_join(mpsc);
+
+    exit(EXIT_SUCCESS);
+}
+
+static void my_consumer_callback(mpsc_consumer_t *consumer, void *data, size_t n, bool closed)
+{
+    IGNORE_UNUSED(consumer);
+    static size_t counter = 0;
+    counter += 1;
+    if (closed)
+    {
+        fprintf(stdout, "[consumer:%zu] closed\\n", counter);
+        return;
+    }
+    if (n != sizeof(struct my_message))
+    {
+        fprintf(stderr, "[consumer] Error: Unexpected message size\\n");
+        exit(EXIT_FAILURE);
+    }
+    struct my_message *message = data;
+    fprintf(stdout, "[consumer:%zu] %s\\n", counter, message\->text);
+    free(data);
+}
+
+static void my_producer_thread_callback(mpsc_producer_t *producer)
+{
+    struct my_producer_thread_callback_context *ctx = mpsc_producer_context(producer);
+    struct my_message message;
+    sprintf(message\&.text, "Hello from producer #%zu!", ctx\->id);
+    assert(mpsc_producer_send(producer, &message, sizeof(struct my_message)));
+}
+
+.fi
+.PP
+ 
+.RE
+.PP
+
+.SH "Enumeration Type Documentation"
+.PP 
+.SS "enum \fBmpsc_register_producer_error_t\fP"
+
+.PP
+The type returned by \fBmpsc_register_producer\fP (as well as by its aliases; i\&.e\&., \fBmpsc_producer_register_producer\fP and \fBmpsc_consumer_register_producer\fP ) when trying to register a new producer on a \fBmpsc_t\fP instance, and which indicates whether an error occurred\&. 
+.PP
+\fBSee also\fP
+.RS 4
+\fBmpsc_register_producer\fP, \fBmpsc_consumer_register_producer\fP, \fBmpsc_producer_register_producer\fP 
+.RE
+.PP
+
+.PP
+\fBEnumerator\fP
+.in +1c
+.TP
+\fB\fIMPSC_REGISTER_PRODUCER_ERROR_NONE \fP\fP
+The producer was successfully registered\&. 
+.TP
+\fB\fIMPSC_REGISTER_PRODUCER_ERROR_CLOSED \fP\fP
+The producer could not be registered because the \fBmpsc_t\fP instance has internally been marked as \fCclosed\fP (i\&.e\&., the channel has been closed)\&. 
+.TP
+\fB\fIMPSC_REGISTER_PRODUCER_ERROR_N_MAX_PRODUCERS_REACHED \fP\fP
+The producer could not be registered because the maximum number of producers allowed (i\&.e\&., \fCn_max_producers\fP) in the \fBmpsc_t\fP instance has been reached\&. 
+.TP
+\fB\fIMPSC_REGISTER_PRODUCER_ERROR_EAGAIN \fP\fP
+The producer could not be registered because a \fBEAGAIN\fP error was observed when, internally, while trying to create a new thread using \fBpthread_create\fP \&. 
+.PP
+\fBNote\fP
+.RS 4
+When \fBmpsc_create_params_t\fP 's \fCerror_handling_enabled\fP is set to \fCfalse\fP, this error will not be returned and will instead result in the process being terminated\&. 
+.RE
+.PP
+
+.SH "Function Documentation"
+.PP 
+.SS "\fBvoid\fP mpsc_consumer_close (\fBmpsc_consumer_t\fP * self)"
+
+.PP
+A function that can be used (from inside the application defined consumer callback implementing \fBmpsc_consumer_callback_t\fP ) on the consumer object \fCself\fP to notify the channel's internal consumer thread that it should return\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIself\fP A pointer to a \fBmpsc_consumer_t\fP instance whose parent object (a \fBmpsc_t\fP instance) should be marked as closed\&. 
+.RE
+.PP
+\fBNote\fP
+.RS 4
+- Before returning, the internal consumer thread will call the \fBmpsc_consumer_callback_t\fP one last time with the \fCclosed\fP argument marked as \fCtrue\fP\&. 
+.PP
+- The \fBmpsc_consumer_callback_t\fP could also receive a call with \fCclosed = true\fP if all producer threads have returned and \fBmpsc_join\fP has been called\&. 
+.RE
+.PP
+
+.SS "\fBmpsc_register_producer_error_t\fP mpsc_consumer_register_producer (\fBmpsc_consumer_t\fP * self, \fBmpsc_producer_thread_callback_t\fP callback, \fBvoid\fP * context)"
+
+.PP
+An alias for \fBmpsc_register_producer\fP , but which is used on an object of type \fBmpsc_consumer_t\fP , to try to register a producer for \fCself\fP 's parent channel object\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIself\fP A pointer to the \fBmpsc_consumer_t\fP object for whose parent (i\&.e\&., a \fBmpsc_t\fP instance) to register a new producer\&. 
+.br
+\fIcallback\fP An application defined thread callback function, which conforms to the \fBmpsc_producer_thread_callback_t\fP interface, to be used by the producer\&. 
+.br
+\fIcontext\fP An application defined context object that can be retrieved from inside \fCcallback\fP by calling the \fBmpsc_producer_context\fP function on the \fCcallback\fP 's \fBmpsc_producer_t\fP argument\&. 
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+\fBmpsc_register_producer_error_t\fP A value used to report a potential error with the call\&. Please read the documentation for \fBmpsc_register_producer_error_t\fP for more information about the potential errors\&. A successful call will return \fBMPSC_REGISTER_PRODUCER_ERROR_NONE\fP \&. 
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBmpsc_register_producer\fP, \fBmpsc_producer_register_producer\fP 
+.RE
+.PP
+\fBNote\fP
+.RS 4
+This function exists for situations in which a consumer would like to register other producers to the same channel\&. 
+.RE
+.PP
+
+.SS "\fBmpsc_t\fP * mpsc_create (\fBmpsc_create_params_t\fP params)"
+
+.PP
+The function used to create a new channel instance (i\&.e\&., a \fBmpsc_t\fP instance)\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIparams\fP The instance's configurations\&. (Note: See documentation for \fBmpsc_create_params_t\fP for the details)\&. 
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+\fBmpsc_t\fP* A pointer to the created \fBmpsc_t\fP object, or the \fBNULL\fP pointer if an error occurred during instantiation\&. 
+.RE
+.PP
+\fBNote\fP
+.RS 4
+If an error occurs when \fBmpsc_create_params_t\fP 's \fCerror_handling_enabled = false\fP, information about the error will be printed to \fBstderr\fP and the process will be terminated, in which case the returned value doesn't need assertion\&. If, on the other hand, \fCerror_handling_enabled = true\fP, then \fBNULL\fP will be returned and a handleable error will be available on \fBerrno\fP \&. It should be noted, however, that not all errors can be handled by the application: some errors will always, regardless of \fCerror_handling_enabled\fP's value, result in the process being terminated\&. Currently, the only errors that can be handled by the application are those related to resources exhaustion (i\&.e\&., \fBENOMEM\fP or \fBEAGAIN\fP ), which, internally, can occur when calling \fBmalloc\fP , \fBpthread_mutex_init\fP , \fBpthread_cond_init\fP , or \fBpthread_create\fP \&. 
+.RE
+.PP
+
+.SS "\fBvoid\fP mpsc_join (\fBmpsc_t\fP * self)"
+
+.PP
+The function that must be called on \fCself\fP to wait for the channel close\&. 
+.PP
+\fBNote\fP
+.RS 4
+- Internally, this function will join the internal consumer thread\&. Once joined, it will set the internal channel state to closed, and then will join all registered producer threads\&. Once all internal threads have been joined, \fCself\fP 's internal resources will be destroyed and the memory freed\&. 
+.PP
+- In most applications, this function should be called on the same thread as the thread that was used to instantiate \fCself\fP (i\&.e\&., the \fBmpsc_t\fP object)\&. 
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIself\fP A pointer to the \fBmpsc_t\fP instance to be joined\&. 
+.RE
+.PP
+
+.SS "\fBvoid\fP * mpsc_producer_context (\fBmpsc_producer_t\fP * self)"
+
+.PP
+A function that can be used from inside the producer thread callback function to retrieve the application defined context object passed to \fBmpsc_register_producer\fP when the producer was registered\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIself\fP A pointer to the \fBmpsc_producer_t\fP instance for which to retrieve the application defined context (i\&.e\&., the user context)\&. 
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+\fBvoid\fP* A pointer to arbitrary memory defined by the application, which contains the 'user context object'\&. 
+.RE
+.PP
+
+.SS "\fBbool\fP mpsc_producer_ping (\fBmpsc_producer_t\fP * self)"
+
+.PP
+A function that can be used from inside a producer thread callback to check whether the channel to which \fCself\fP belongs is still opened\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIself\fP A pointer to the \fBmpsc_producer_t\fP instance for which to check whether the channel is still open\&. 
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+\fBbool\fP A boolean value indicating whether the underlying channel is still open (\fCtrue\fP) or whether it has been marked as closed (\fCfalse\fP)\&. 
+.RE
+.PP
+\fBNote\fP
+.RS 4
+A producer thread callback function should return when its channel has been marked as closed, to avoid making the application's call to \fBmpsc_join\fP hang\&. 
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBmpsc_producer_send\fP, \fBmpsc_producer_send_empty\fP 
+.RE
+.PP
+
+.SS "\fBmpsc_register_producer_error_t\fP mpsc_producer_register_producer (\fBmpsc_producer_t\fP * self, \fBmpsc_producer_thread_callback_t\fP callback, \fBvoid\fP * context)"
+
+.PP
+An alias for \fBmpsc_register_producer\fP , but which is used on an object of type \fBmpsc_producer_t\fP , to try to register a producer for \fCself\fP 's parent channel object\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIself\fP A pointer to the \fBmpsc_producer_t\fP object for whose parent (i\&.e\&., a \fBmpsc_t\fP instance) to register a new producer\&. 
+.br
+\fIcallback\fP An application defined thread callback function, which conforms to the \fBmpsc_producer_thread_callback_t\fP interface, to be used by the producer\&. 
+.br
+\fIcontext\fP An application defined context object that can be retrieved from inside \fCcallback\fP by calling the \fBmpsc_producer_context\fP function on the \fCcallback\fP 's \fBmpsc_producer_t\fP argument\&. 
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+\fBmpsc_register_producer_error_t\fP A value used to report a potential error with the call\&. Please read the documentation for \fBmpsc_register_producer_error_t\fP for more information about the potential errors\&. A successful call will return \fBMPSC_REGISTER_PRODUCER_ERROR_NONE\fP \&. 
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBmpsc_register_producer\fP, \fBmpsc_producer_register_producer\fP 
+.RE
+.PP
+\fBNote\fP
+.RS 4
+This function exists for situations in which a producer would like to register other producers to the same channel\&. 
+.RE
+.PP
+
+.SS "\fBbool\fP mpsc_producer_send (\fBmpsc_producer_t\fP * self, \fBvoid\fP * data, \fBsize_t\fP n)"
+
+.PP
+The function used (from inside a producer thread callback function) to send a message to the channel's consumer\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIself\fP A pointer to the \fBmpsc_producer_t\fP instance for which to send a message down the underlying channel, to be delivered to the consumer\&. 
+.br
+\fIdata\fP A pointer to arbitrary bytes ( \fCn\fP bytes) to be sent to the channel's consumer\&. 
+.br
+\fIn\fP the message size, in bytes\&. 
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+\fBbool\fP A boolean value indicating whether the message was accepted or not\&. \fCfalse\fP means that the channel has been marked as closed and that, as a consequence, the message could not be delivered\&. \fCtrue\fP means that the message was successfully copied to the internal buffer and will eventually be picked up and copied by the internal consumer thread for delivery to the consumer callback\&. 
+.RE
+.PP
+\fBNote\fP
+.RS 4
+- The message size (i\&.e\&., \fCn\fP ) should never be greater than \fBmpsc_create_params_t\fP 's the \fCbuffer_size\fP parameter value (which was specified when creating the channel using \fBmpsc_create\fP )\&. If \fCn > buffer_size\fP, an error message will be printed to \fBstderr\fP and the process will be terminated\&. 
+.PP
+- It is possible to send en empty message using \fCdata = NULL\fP and \fCn = 0\fP, although there is a function called \fBmpsc_producer_send_empty\fP that can be used for that purpose\&. 
+.PP
+- The \fCn\fP bytes from \fCdata\fP are temporarily copied to the internal buffer\&. So, if the producer thread callback function implementation uses dynamic memory allocation for \fCdata\fP , it must call \fBfree()\fP on that memory when it's no longer needed to avoid a leak\&. 
+.PP
+- In some applications, a producer will not need to send messages to the consumer, and will simply perform a job and return\&. Once all producer thread callback functions have returned for a particular \fBmpsc_t\fP object, the consumer callback (i\&.e\&., \fBmpsc_consumer_callback_t\fP ) will be called one last time with its \fCclosed\fP argument set to \fCtrue\fP, and the call to \fBmpsc_join\fP will return\&. 
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBmpsc_producer_ping\fP, \fBmpsc_producer_send_empty\fP 
+.RE
+.PP
+
+.SS "\fBbool\fP mpsc_producer_send_empty (\fBmpsc_producer_t\fP * self)"
+
+.PP
+Similar to \fBmpsc_producer_send\fP , except that this function is used (from inside a producer thread callback function) to send an empty message\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIself\fP A pointer to the \fBmpsc_producer_t\fP instance for which to send a message down the underlying channel, to be delivered to the consumer\&. 
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+\fBbool\fP A boolean value indicating whether the message was accepted or not\&. \fCfalse\fP means that the channel has been marked as closed and that, as a consequence, the message could not be delivered\&. \fCtrue\fP means that the message was accepted and will eventually be picked up by the internal consumer thread for delivery to the consumer callback\&. 
+.RE
+.PP
+\fBNote\fP
+.RS 4
+In some applications, a producer will not need to send messages to the consumer, and will simply perform a job and return\&. Once all producer thread callback functions have returned for a particular \fBmpsc_t\fP object, the consumer callback (i\&.e\&., \fBmpsc_consumer_callback_t\fP ) will be called one last time with its \fCclosed\fP argument set to \fCtrue\fP, and the call to \fBmpsc_join\fP will return\&. 
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBmpsc_producer_ping\fP, \fBmpsc_producer_send\fP 
+.RE
+.PP
+
+.SS "\fBmpsc_register_producer_error_t\fP mpsc_register_producer (\fBmpsc_t\fP * self, \fBmpsc_producer_thread_callback_t\fP callback, \fBvoid\fP * context)"
+
+.PP
+The function used to register a new producer for \fCself\fP \&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIself\fP A pointer to the \fBmpsc_t\fP instance for which to register a new producer\&. 
+.br
+\fIcallback\fP An application defined thread callback function, which conforms to the \fBmpsc_producer_thread_callback_t\fP interface, to be used by the producer\&. 
+.br
+\fIcontext\fP An application defined context object that can be retrieved from inside \fCcallback\fP by calling the \fBmpsc_producer_context\fP function on the \fCcallback\fP 's \fBmpsc_producer_t\fP argument\&. 
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+\fBmpsc_register_producer_error_t\fP A value used to report a potential error with the call\&. Please read the documentation for \fBmpsc_register_producer_error_t\fP for more information about the potential errors\&. A successful call will return \fBMPSC_REGISTER_PRODUCER_ERROR_NONE\fP \&. 
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBmpsc_consumer_register_producer\fP, \fBmpsc_producer_register_producer\fP 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for lib<mpsc> from the source code\&.
